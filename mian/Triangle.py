@@ -1,15 +1,15 @@
 import math
+import random
 import numpy as np
-from sympy import *
-import time
 import warnings
+from multiprocessing import Pool, cpu_count
 
 
 class CircumferenceAndArea(object):
     """用于计算三角形周长和面积"""
 
     def __init__(self, a=0, b=0, c=0, bottom=0, high=0, pax=0, pbx=0, pcx=0, pay=0, pby=0, pcy=0, paz=0, pbz=0, pcz=0,
-                 getparms=0, dimensionality=0):
+                 getparms=0, dimensionality=0,decimal=0):
         self.SidesA = a
         self.SidesB = b
         self.SidesC = c
@@ -26,19 +26,18 @@ class CircumferenceAndArea(object):
         self.CoordinatePointCZ = pcz
         self.Getparms = getparms
         self.Dimensionality = dimensionality
+        self.decimal = decimal
 
     def circumference(self):
-        circumference = self.SidesA + self.SidesB + self.SidesC
-        return circumference
+        return np.round(self.SidesA + self.SidesB + self.SidesC, self.decimal)
 
     def area_is_bottom_high(self):
-        area = self.bottom * self.high * 0.5
-        return area
+        return np.round(self.bottom * self.high * 0.5, self.decimal)
 
     def area_is_sides(self):
         p = (self.SidesA + self.SidesB + self.SidesC) * 0.5
         area = math.sqrt(p * (p - self.SidesA) * (p - self.SidesB) * (p - self.SidesC))
-        return area
+        return np.round(area, self.decimal)
 
     def area_is_planar_vector(self):
         vector_abx = self.CoordinatePointAX - self.CoordinatePointBX
@@ -46,7 +45,7 @@ class CircumferenceAndArea(object):
         vector_acx = self.CoordinatePointAX - self.CoordinatePointCX
         vector_acy = self.CoordinatePointAY - self.CoordinatePointCY
         area = abs(0.5 * (1 * vector_abx * vector_acy) + (-1 * vector_aby * vector_acx))
-        return area
+        return np.round(area, self.decimal)
 
     def area_is_spatial_vectors(self):
         vector_ab = np.array([self.CoordinatePointBX - self.CoordinatePointAX,
@@ -56,335 +55,310 @@ class CircumferenceAndArea(object):
                               self.CoordinatePointCY - self.CoordinatePointAY,
                               self.CoordinatePointCZ - self.CoordinatePointAZ])
         area = 0.5 * np.linalg.norm(np.cross(vector_ab, vector_ac))
-        return area
+        return np.round(area, self.decimal)
 
 
 class TriangleCentres(CircumferenceAndArea):
-    """用于求三角形四心"""
+    """用于求三角形四心-平面-空间"""
 
     def centroid(self):
-        if self.Dimensionality == 2:
-            planar_centroid_x = (self.CoordinatePointAX + self.CoordinatePointBX + self.CoordinatePointCX) / 3
-            planar_centroid_y = (self.CoordinatePointAY + self.CoordinatePointBY + self.CoordinatePointCY) / 3
-            planar_centroid_xy = (planar_centroid_x, planar_centroid_y)
-            return planar_centroid_xy
-        elif self.Dimensionality == 3:
-            planar_centroid_x = (self.CoordinatePointAX + self.CoordinatePointBX + self.CoordinatePointCX) / 3
-            planar_centroid_y = (self.CoordinatePointAY + self.CoordinatePointBY + self.CoordinatePointCY) / 3
-            planar_centroid_z = (self.CoordinatePointAZ + self.CoordinatePointBZ + self.CoordinatePointCZ) / 3
-            planar_centroid_xyz = (planar_centroid_x, planar_centroid_y, planar_centroid_z)
-            return planar_centroid_xyz
-        else:
+        points = np.array([
+            [self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ if self.Dimensionality == 3 else 0],
+            [self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ if self.Dimensionality == 3 else 0],
+            [self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ if self.Dimensionality == 3 else 0]
+        ])
+
+        if self.Dimensionality not in [2, 3]:
             warnings.warn("Please enter whether it is 2D or 3D", SyntaxWarning)
+            return None
+
+        centroid = np.mean(points[:, :self.Dimensionality], axis=0)
+
+        return np.round(centroid, self.decimal)
 
     def incentre(self):
         if self.Dimensionality == 2:
-            a = math.sqrt((self.CoordinatePointBX - self.CoordinatePointCX) ** 2 + (
-                    self.CoordinatePointBY - self.CoordinatePointCY) ** 2)
-            b = math.sqrt((self.CoordinatePointCX - self.CoordinatePointAX) ** 2 + (
-                    self.CoordinatePointCY - self.CoordinatePointAY) ** 2)
-            c = math.sqrt((self.CoordinatePointAX - self.CoordinatePointBX) ** 2 + (
-                    self.CoordinatePointAY - self.CoordinatePointBY) ** 2)
-            planar_incentre_x = (
-                                        a * self.CoordinatePointAX + b * self.CoordinatePointBX + c * self.CoordinatePointCX) / (
-                                        a + b + c)
-            planar_incentre_y = (
-                                        a * self.CoordinatePointAY + b * self.CoordinatePointBY + c * self.CoordinatePointCY) / (
-                                        a + b + c)
-            planar_incentre_xy = (planar_incentre_x, planar_incentre_y)
-            return planar_incentre_xy
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
+
+            a = np.linalg.norm(B - C)
+            b = np.linalg.norm(C - A)
+            c = np.linalg.norm(A - B)
+
+            planar_incentre = (a * A + b * B + c * C) / (a + b + c)
+            return np.round(planar_incentre, self.decimal)
 
         elif self.Dimensionality == 3:
-            a = math.sqrt((self.CoordinatePointBX - self.CoordinatePointCX) ** 2 + (
-                    self.CoordinatePointBY - self.CoordinatePointCY) ** 2 + (
-                                  self.CoordinatePointBZ - self.CoordinatePointCZ) ** 2)
-            b = math.sqrt((self.CoordinatePointCX - self.CoordinatePointAX) ** 2 + (
-                    self.CoordinatePointCY - self.CoordinatePointAY) ** 2 + (
-                                  self.CoordinatePointCZ - self.CoordinatePointAZ) ** 2)
-            c = math.sqrt((self.CoordinatePointAX - self.CoordinatePointBX) ** 2 + (
-                    self.CoordinatePointAY - self.CoordinatePointBY) ** 2 + (
-                                  self.CoordinatePointAZ - self.CoordinatePointBZ) ** 2)
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
 
-            spatial_incentre_x = (
-                                         a * self.CoordinatePointAX + b * self.CoordinatePointBX + c * self.CoordinatePointCX) / (
-                                         a + b + c)
-            spatial_incentre_y = (
-                                         a * self.CoordinatePointAY + b * self.CoordinatePointBY + c * self.CoordinatePointCY) / (
-                                         a + b + c)
-            spatial_incentre_z = (
-                                         a * self.CoordinatePointAZ + b * self.CoordinatePointBZ + c * self.CoordinatePointCZ) / (
-                                         a + b + c)
-            spatial_incentre_xyz = (spatial_incentre_x, spatial_incentre_y, spatial_incentre_z)
-            return spatial_incentre_xyz
+            a = np.linalg.norm(B - C)
+            b = np.linalg.norm(C - A)
+            c = np.linalg.norm(A - B)
+
+            spatial_incentre = (a * A + b * B + c * C) / (a + b + c)
+            return np.round(spatial_incentre, self.decimal)
+
         else:
             warnings.warn("Please enter whether it is 2D or 3D", SyntaxWarning)
 
     def orthocentre(self):
         if self.Dimensionality == 2:
-            a = (self.CoordinatePointAX - self.CoordinatePointBX) * (
-                    self.CoordinatePointBX - self.CoordinatePointCX) * (
-                        self.CoordinatePointCX - self.CoordinatePointAX)
-            b = (self.CoordinatePointAY - self.CoordinatePointBY) * (
-                    self.CoordinatePointBY - self.CoordinatePointCY) * (
-                        self.CoordinatePointCY - self.CoordinatePointAY)
-            c = self.CoordinatePointAX * self.CoordinatePointBX * (
-                    self.CoordinatePointAY - self.CoordinatePointBY) + self.CoordinatePointBX * self.CoordinatePointCX * (
-                        self.CoordinatePointBY - self.CoordinatePointCY) + self.CoordinatePointCX * self.CoordinatePointAX * (
-                        self.CoordinatePointCY - self.CoordinatePointAY)
-            d = self.CoordinatePointAY * self.CoordinatePointBY * (
-                    self.CoordinatePointAX - self.CoordinatePointBX) + self.CoordinatePointBY * self.CoordinatePointCY * (
-                        self.CoordinatePointBX - self.CoordinatePointCX) + self.CoordinatePointCY * self.CoordinatePointAY * (
-                        self.CoordinatePointCX - self.CoordinatePointAX)
-            e = (self.CoordinatePointAX * self.CoordinatePointCY - self.CoordinatePointAX * self.CoordinatePointBY) + (
-                    self.CoordinatePointBX * self.CoordinatePointAY - self.CoordinatePointBX * self.CoordinatePointCY) + (
-                        self.CoordinatePointCX * self.CoordinatePointBY - self.CoordinatePointCX * self.CoordinatePointAY)
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
+
+            AB = B - A
+            AC = C - A
+            BC = C - B
+
+            a = np.dot(AB, AC)
+            b = np.dot(-AB, -BC)
+            c = np.dot(AC, -BC)
+            d = np.dot(-AC, B - C)
+            e = np.linalg.det([AB, BC, AC])
+
+            if e == 0:
+                warnings.warn("The points are collinear, cannot compute orthocentre.", RuntimeWarning)
+                return None
+
             planar_orthocentre_x = (b + c) / e
             planar_orthocentre_y = (a + d) / e
             planar_orthocentre_xy = (planar_orthocentre_x, planar_orthocentre_y)
-            return planar_orthocentre_xy
+            return np.round(planar_orthocentre_xy, self.decimal)
+
         elif self.Dimensionality == 3:
-            a = (self.CoordinatePointBX - self.CoordinatePointAX) * (
-                    self.CoordinatePointCX - self.CoordinatePointAX) + (
-                        self.CoordinatePointBY - self.CoordinatePointAY) * (
-                        self.CoordinatePointCY - self.CoordinatePointAY) + (
-                        self.CoordinatePointBZ - self.CoordinatePointAZ) * (
-                        self.CoordinatePointCZ - self.CoordinatePointAZ)
-            b = (self.CoordinatePointAX - self.CoordinatePointBX) * (
-                    self.CoordinatePointCX - self.CoordinatePointBX) + (
-                        self.CoordinatePointAY - self.CoordinatePointBY) * (
-                        self.CoordinatePointCY - self.CoordinatePointBY) + (
-                        self.CoordinatePointAZ - self.CoordinatePointBZ) * (
-                        self.CoordinatePointCZ - self.CoordinatePointBZ)
-            c = (self.CoordinatePointAX - self.CoordinatePointCX) * (
-                    self.CoordinatePointBX - self.CoordinatePointCX) + (
-                        self.CoordinatePointAY - self.CoordinatePointCY) * (
-                        self.CoordinatePointBY - self.CoordinatePointCY) + (
-                        self.CoordinatePointAZ - self.CoordinatePointCZ) * (
-                        self.CoordinatePointBZ - self.CoordinatePointCZ)
-            spatial_orthocentre_x = ((
-                                             b * c * self.CoordinatePointAX + a * c * self.CoordinatePointBX + a * b * self.CoordinatePointCX) / (
-                                             b * c + a * c + a * b))
-            spatial_orthocentre_y = ((
-                                             b * c * self.CoordinatePointAY + a * c * self.CoordinatePointBY + a * b * self.CoordinatePointCY) / (
-                                             b * c + a * c + a * b))
-            spatial_orthocentre_z = ((
-                                             b * c * self.CoordinatePointAZ + a * c * self.CoordinatePointBZ + a * b * self.CoordinatePointCZ) / (
-                                             b * c + a * c + a * b))
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
+
+            AB = B - A
+            AC = C - A
+            BC = C - B
+
+            a = np.dot(AB, AC)
+            b = np.dot(-AB, -BC)
+            c = np.dot(AC, -BC)
+            denominator = b * c + a * c + a * b
+
+            if denominator == 0:
+                warnings.warn("The points are coplanar or not distinct, cannot compute orthocentre.", RuntimeWarning)
+                return None
+
+            spatial_orthocentre_x = (b * c * A[0] + a * c * B[0] + a * b * C[0]) / denominator
+            spatial_orthocentre_y = (b * c * A[1] + a * c * B[1] + a * b * C[1]) / denominator
+            spatial_orthocentre_z = (b * c * A[2] + a * c * B[2] + a * b * C[2]) / denominator
             spatial_orthocentre_xyz = (spatial_orthocentre_x, spatial_orthocentre_y, spatial_orthocentre_z)
-            return spatial_orthocentre_xyz
+            return np.round(spatial_orthocentre_xyz, self.decimal)
+
         else:
             warnings.warn("Please enter whether it is 2D or 3D", SyntaxWarning)
 
     def circumcentre(self):
         if self.Dimensionality == 2:
-            a = ((self.CoordinatePointBX ** 2) + (self.CoordinatePointBY ** 2)) - (
-                    (self.CoordinatePointAX ** 2) + (self.CoordinatePointAY ** 2))
-            b = ((self.CoordinatePointCX ** 2) + (self.CoordinatePointCY ** 2)) - (
-                    (self.CoordinatePointBX ** 2) + (self.CoordinatePointBY ** 2))
-            fm = 2 * ((self.CoordinatePointCY - self.CoordinatePointBY) * (
-                    self.CoordinatePointBX - self.CoordinatePointAX) - (
-                              self.CoordinatePointBY - self.CoordinatePointAY) * (
-                              self.CoordinatePointCX - self.CoordinatePointBX))
-            planar_circumcentre_x = ((self.CoordinatePointCY - self.CoordinatePointBY) * a - (
-                    self.CoordinatePointBY - self.CoordinatePointAY) * b) / fm
-            planar_circumcentre_y = ((self.CoordinatePointBX - self.CoordinatePointAX) * b - (
-                    self.CoordinatePointCX - self.CoordinatePointBX) * a) / fm
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
+
+            AB = B - A
+            AC = C - A
+            BC = C - B
+
+            a = np.dot(B, B) - np.dot(A, A)
+            b = np.dot(C, C) - np.dot(B, B)
+
+            fm = 2 * (AC[1] * AB[0] - AB[1] * AC[0])
+            planar_circumcentre_x = (AC[1] * a - AB[1] * b) / fm
+            planar_circumcentre_y = (AB[0] * b - AC[0] * a) / fm
+
             planar_circumcentre_xy = (planar_circumcentre_x, planar_circumcentre_y)
-            return planar_circumcentre_xy
+
+            return np.round(planar_circumcentre_xy, self.decimal)
 
         elif self.Dimensionality == 3:
-            if self.CoordinatePointAZ == self.CoordinatePointBZ == self.CoordinatePointCZ:
-                spatial_circumcentre_z = self.CoordinatePointAZ
-                a = ((self.CoordinatePointBX ** 2) + (self.CoordinatePointBY ** 2)) - (
-                        (self.CoordinatePointAX ** 2) + (self.CoordinatePointAY ** 2))
-                b = ((self.CoordinatePointCX ** 2) + (self.CoordinatePointCY ** 2)) - (
-                        (self.CoordinatePointBX ** 2) + (self.CoordinatePointBY ** 2))
-                fm = 2 * ((self.CoordinatePointCY - self.CoordinatePointBY) * (
-                        self.CoordinatePointBX - self.CoordinatePointAX) - (
-                                  self.CoordinatePointBY - self.CoordinatePointAY) * (
-                                  self.CoordinatePointCX - self.CoordinatePointBX))
-                spatial_circumcentre_x = ((self.CoordinatePointCY - self.CoordinatePointBY) * a - (
-                        self.CoordinatePointBY - self.CoordinatePointAY) * b) / fm
-                spatial_circumcentre_y = ((self.CoordinatePointBX - self.CoordinatePointAX) * b - (
-                        self.CoordinatePointCX - self.CoordinatePointBX) * a) / fm
-                spatial_circumcentre_xyz = (spatial_circumcentre_x, spatial_circumcentre_y, spatial_circumcentre_z)
-                return spatial_circumcentre_xyz
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
+
+            AB = B - A
+            AC = C - A
+            BC = C - B
+
+            a = np.dot(B, B) - np.dot(A, A)
+            b = np.dot(C, C) - np.dot(B, B)
+            c = np.dot(A, A) - np.dot(C, C)
+
+            normal = np.cross(AB, AC)
+            d = np.dot(normal, normal)
+
+            if d != 0:
+                planar_circumcentre_x = (np.dot(normal, np.cross(AC, [a, b, c])) / d)
+                planar_circumcentre_y = (np.dot(normal, np.cross(BC, [a, b, c])) / d)
+                planar_circumcentre_z = (np.dot(normal, np.cross(AB, [a, b, c])) / d)
+                planar_circumcentre_xyz = (planar_circumcentre_x, planar_circumcentre_y, planar_circumcentre_z)
             else:
-                a = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
-                b = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
-                c = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
-                a_dot_b = np.dot(a, b)
-                b_dot_c = np.dot(b, c)
-                c_dot_a = np.dot(c, a)
-                a_modulus = np.linalg.norm(a)
-                b_modulus = np.linalg.norm(b)
-                c_modulus = np.linalg.norm(c)
-                cos_a = a_dot_b / a_modulus * b_modulus
-                cos_b = c_dot_a / c_modulus * a_modulus
-                cos_c = b_dot_c / b_modulus * c_modulus
-                sin_2a = 2 * (cos_a - 90)
-                sin_2b = 2 * (cos_b - 90)
-                sin_2c = 2 * (cos_c - 90)
-                spatial_circumcentre_x = (
-                                                 sin_2a * self.CoordinatePointAX + sin_2b * self.CoordinatePointBX + sin_2c * self.CoordinatePointCX) / (
-                                                 sin_2a + sin_2b + sin_2c)
-                spatial_circumcentre_y = (
-                                                 sin_2a * self.CoordinatePointAY + sin_2b * self.CoordinatePointBY + sin_2c * self.CoordinatePointCY) / (
-                                                 sin_2a + sin_2b + sin_2c)
-                spatial_circumcentre_z = (
-                                                 sin_2a * self.CoordinatePointAZ + sin_2b * self.CoordinatePointBZ + sin_2c * self.CoordinatePointCZ) / (
-                                                 sin_2a + sin_2b + sin_2c)
-                spatial_circumcentre_xyz = (spatial_circumcentre_x, spatial_circumcentre_y, spatial_circumcentre_z)
-                return spatial_circumcentre_xyz
-        else:
-            warnings.warn("Please enter whether it is 2D or 3D", SyntaxWarning)
+                planar_circumcentre_xyz = (float('nan'), float('nan'), float('nan'))
+
+            return np.round(planar_circumcentre_xyz, self.decimal)
+        
+'''
+费马点退火算法
+'''
+
+def distance(p1, p2):
+    return np.linalg.norm(p1 - p2)
+
+
+def total_distance(p, A, B, C):
+    return distance(p, A) + distance(p, B) + distance(p, C)
+
+
+def neighbor(point, scale=0.1):
+    return point + np.random.uniform(-scale, scale, size=point.shape)
+
+
+def acceptance_probability(old_cost, new_cost, temperature):
+    return 1.0 if new_cost < old_cost else np.exp((old_cost - new_cost) / temperature)
+
+
+def simulated_annealing(A, B, C, initial_point):
+    current_point = initial_point
+    current_cost = total_distance(current_point, A, B, C)
+
+    T = 1.0
+    T_min = 1e-9
+    alpha = 0.999
+
+    while T > T_min:
+        new_point = neighbor(current_point)
+        new_cost = total_distance(new_point, A, B, C)
+        if acceptance_probability(current_cost, new_cost, T) > random.random():
+            current_point = new_point
+            current_cost = new_cost
+        T *= alpha
+
+    return current_point
 
 
 class FermatProblem(CircumferenceAndArea):
-    """"费马问题"""
+
+    @staticmethod
+    def run_simulated_annealing(args):
+        A, B, C, initial_point = args
+        return simulated_annealing(A, B, C, initial_point)
 
     def fermat_problem(self):
+
         if self.Dimensionality == 2:
-            a = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
-            b = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
-            c = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
-            a_minus_b = a - b
-            a_minus_c = a - c
-            b_minus_c = b - c
-            vector_modulus_a = np.linalg.norm(a_minus_b)
-            vector_modulus_b = np.linalg.norm(a_minus_c)
-            vector_modulus_c = np.linalg.norm(b_minus_c)
-            if vector_modulus_a + vector_modulus_b > vector_modulus_c and vector_modulus_a + vector_modulus_c > vector_modulus_b and vector_modulus_b + vector_modulus_c > vector_modulus_a:
-                a_b = np.dot(a_minus_b, a_minus_c)
-                a_c = np.dot(a_minus_b, b_minus_c)
-                b_c = np.dot(a_minus_c, b_minus_c)
-                cos_a = a_b / (vector_modulus_a * vector_modulus_b)
-                cos_b = a_c / (vector_modulus_a * vector_modulus_c)
-                cos_c = b_c / (vector_modulus_b * vector_modulus_c)
-                aa = np.degrees(np.arcsin(cos_a))
-                bb = np.degrees(np.arcsin(cos_b))
-                cc = np.degrees(np.arccos(cos_c))
-                aaa = abs(aa)
-                bbb = abs(bb)
-                ccc = abs(cc)
-
-                if aaa < 120 and bbb < 120 and ccc < 120:
-                    p = (vector_modulus_a + vector_modulus_b + vector_modulus_c) * 0.5
-                    area = math.sqrt(p * (p - vector_modulus_a) * (p - vector_modulus_b) * (p - vector_modulus_c))
-                    k_2 = (vector_modulus_a ** 2 + vector_modulus_b ** 2 + vector_modulus_c ** 2) * 0.5 + 2 * math.sqrt(
-                        3) * area
-                    k = k_2 ** 0.5
-                    y = (vector_modulus_a ** 2 + vector_modulus_b ** 2 - 2 * vector_modulus_c ** 2 + k_2) / (3 * k)
-                    x = (vector_modulus_a ** 2 + vector_modulus_c ** 2 - 2 * vector_modulus_b ** 2 + k_2) / (3 * k)
-                    z = (vector_modulus_c ** 2 + vector_modulus_b ** 2 - 2 * vector_modulus_a ** 2 + k_2) / (3 * k)
-                    if self.Getparms == 1:
-                        l, j = symbols('l j')
-                        eq1 = Eq(((self.CoordinatePointCX - l) ** 2 + (self.CoordinatePointCY - j) ** 2) ** 0.5, x)
-                        eq2 = Eq(((self.CoordinatePointBX - l) ** 2 + (self.CoordinatePointBY - j) ** 2) ** 0.5, z)
-                        solution = solve((eq1, eq2), (l, j))
-                        return solution
-                    elif self.Getparms == 0:
-                        xyz = x + y + z
-                        return xyz
-                    else:
-                        warnings.warn("getparms value is useless", SyntaxWarning)
-                if aaa >= 120 or bbb >= 120 or ccc >= 120:
-                    max_a = max(aaa, bbb, ccc)
-                    if max_a == aaa:
-                        return a
-                    elif max_a == bbb:
-                        return c
-                    elif max_a == ccc:
-                        return b
-            else:
-                print("It is not a triangle")
-
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
         elif self.Dimensionality == 3:
-            a = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
-            b = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
-            c = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
-            a_minus_b = a - b
-            a_minus_c = a - c
-            b_minus_c = b - c
-            vector_modulus_a = np.linalg.norm(a_minus_b)
-            vector_modulus_b = np.linalg.norm(a_minus_c)
-            vector_modulus_c = np.linalg.norm(b_minus_c)
-            if vector_modulus_a + vector_modulus_b > vector_modulus_c and vector_modulus_a + vector_modulus_c > vector_modulus_b and vector_modulus_b + vector_modulus_c > vector_modulus_a:
-                a_b = np.dot(a_minus_b, a_minus_c)
-                a_c = np.dot(a_minus_b, b_minus_c)
-                b_c = np.dot(a_minus_c, b_minus_c)
-                cos_a = a_b / (vector_modulus_a * vector_modulus_b)
-                cos_b = a_c / (vector_modulus_a * vector_modulus_c)
-                cos_c = b_c / (vector_modulus_b * vector_modulus_c)
-                aa = np.degrees(np.arcsin(cos_a))
-                bb = np.degrees(np.arcsin(cos_b))
-                cc = np.degrees(np.arccos(cos_c))
-                aaa = abs(aa)
-                bbb = abs(bb)
-                ccc = abs(cc)
-
-                if aaa < 120 and bbb < 120 and ccc < 120:
-                    p = (vector_modulus_a + vector_modulus_b + vector_modulus_c) * 0.5
-                    area = math.sqrt(p * (p - vector_modulus_a) * (p - vector_modulus_b) * (p - vector_modulus_c))
-                    k_2 = (vector_modulus_a ** 2 + vector_modulus_b ** 2 + vector_modulus_c ** 2) * 0.5 + 2 * math.sqrt(
-                        3) * area
-                    k = k_2 ** 0.5
-                    y = (vector_modulus_a ** 2 + vector_modulus_b ** 2 - 2 * vector_modulus_c ** 2 + k_2) / (3 * k)
-                    x = (vector_modulus_a ** 2 + vector_modulus_c ** 2 - 2 * vector_modulus_b ** 2 + k_2) / (3 * k)
-                    z = (vector_modulus_c ** 2 + vector_modulus_b ** 2 - 2 * vector_modulus_a ** 2 + k_2) / (3 * k)
-                    if self.Getparms == 1:
-                        if self.CoordinatePointAZ == self.CoordinatePointBZ == self.CoordinatePointCZ:
-                            l, j = symbols('l j')
-                            eq1 = Eq(((self.CoordinatePointCX - l) ** 2 + (self.CoordinatePointCY - j) ** 2) ** 0.5, x)
-                            eq2 = Eq(((self.CoordinatePointBX - l) ** 2 + (self.CoordinatePointBY - j) ** 2) ** 0.5, z)
-                            solution = solve((eq1, eq2), (l, j))
-                            return solution
-                        else:
-                            l, j, f = symbols('l j f')
-                            eq1 = Eq(((self.CoordinatePointCX - l) ** 2 + (self.CoordinatePointCY - j) ** 2 + (
-                                    self.CoordinatePointCZ - f) ** 2) ** 0.5, x)
-                            eq2 = Eq(((self.CoordinatePointBX - l) ** 2 + (self.CoordinatePointBY - j) ** 2 + (
-                                    self.CoordinatePointBZ - f) ** 2) ** 0.5, z)
-                            eq3 = Eq(((self.CoordinatePointAX - l) ** 2 + (self.CoordinatePointAY - j) ** 2 + (
-                                    self.CoordinatePointAZ - f) ** 2) ** 0.5, y)
-                            solution = solve((eq1, eq2, eq3), (l, j, f))
-                            return solution
-                    elif self.Getparms == 0:
-                        xyz = x + y + z
-                        return xyz
-                    else:
-                        warnings.warn("getparms value is useless", SyntaxWarning)
-                if aaa >= 120 or bbb >= 120 or ccc >= 120:
-                    max_a = max(aaa, bbb, ccc)
-                    if max_a == aaa:
-                        return a
-                    elif max_a == bbb:
-                        return c
-                    elif max_a == ccc:
-                        return b
-            else:
-                print("It is not a triangle")
+            A = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
+            B = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
+            C = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
         else:
             warnings.warn("Please enter whether it is 2D or 3D", SyntaxWarning)
+
+        num_processes = cpu_count()
+        initial_points = [(A + B + C) / 3 for _ in range(num_processes)]
+        args = [(A, B, C, initial_point) for initial_point in initial_points]
+
+        with Pool(processes=num_processes) as pool:
+            results = pool.map(FermatProblem.run_simulated_annealing, args)
+
+        best_result = min(results, key=lambda p: total_distance(p, A, B, C))
+
+        return np.round(best_result, self.decimal)
 
 
 class NapoleonicTriangle(CircumferenceAndArea):
     def napoleonic_triangle(self):
         if self.Dimensionality == 2:
-            if (self.CoordinatePointAX == 0 and self.CoordinatePointAY == 0) or (self.CoordinatePointBX == 0 and self.CoordinatePointBY == 0) or (self.CoordinatePointCX == 0 and self.CoordinatePointCY == 0):
-                a = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
-                u = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
-                v = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
-                w = u - v
-                planar_x = (w[0] + w[0] + w[0]) / 3
-                planar_y = (self.CoordinatePointAY + self.CoordinatePointBY + self.CoordinatePointCY) / 3
-                planar_xy = (planar_x, planar_y)
-                return planar_xy
+            p1 = np.array([self.CoordinatePointAX, self.CoordinatePointAY])
+            p2 = np.array([self.CoordinatePointBX, self.CoordinatePointBY])
+            p3 = np.array([self.CoordinatePointCX, self.CoordinatePointCY])
 
+            def midpoint(p, q):
+                return (p + q) / 2
 
+            def perpendicular(p, q):
+                direction = q - p
+                return np.array([-direction[1], direction[0]])
 
+            def line_intersection(a1, b1, a2, b2):
+                A1 = b1[1] - a1[1]
+                B1 = a1[0] - b1[0]
+                C1 = A1 * a1[0] + B1 * a1[1]
 
-t = time.time()
-tri = TriangleCentres(pax=0, pay=0, pbx=8, pby=0, pcx=4, pcy=2, paz=0, pbz=4, pcz=2, dimensionality=3)
-print(tri.circumcentre())
-print(f'coast:{time.time() - t:.4f}s')
+                A2 = b2[1] - a2[1]
+                B2 = a2[0] - b2[0]
+                C2 = A2 * a2[0] + B2 * a2[1]
+
+                determinant = A1 * B2 - A2 * B1
+                if determinant == 0:
+                    raise ValueError("Lines do not intersect")
+
+                x = (B2 * C1 - B1 * C2) / determinant
+                y = (A1 * C2 - A2 * C1) / determinant
+                return np.array([x, y])
+
+            m1 = midpoint(p1, p2)
+            m2 = midpoint(p2, p3)
+            m3 = midpoint(p3, p1)
+
+            n1 = perpendicular(p1, p2)
+            n2 = perpendicular(p2, p3)
+            n3 = perpendicular(p3, p1)
+
+            napoleon1 = line_intersection(m1, m1 + n1, m2, m2 + n2)
+            napoleon2 = line_intersection(m2, m2 + n2, m3, m3 + n3)
+            napoleon3 = line_intersection(m3, m3 + n3, m1, m1 + n1)
+
+            napoleon_point = (napoleon1 + napoleon2 + napoleon3) / 3
+        
+        elif self.Dimensionality == 3:
+            p1 = np.array([self.CoordinatePointAX, self.CoordinatePointAY, self.CoordinatePointAZ])
+            p2 = np.array([self.CoordinatePointBX, self.CoordinatePointBY, self.CoordinatePointBZ])
+            p3 = np.array([self.CoordinatePointCX, self.CoordinatePointCY, self.CoordinatePointCZ])
+            def triangle_normal(p1, p2, p3):
+                u = p2 - p1
+                v = p3 - p1
+                return np.cross(u, v)
+
+            def plane_from_points(p1, p2, p3):
+                normal = triangle_normal(p1, p2, p3)
+                d = -np.dot(normal, p1)
+                return normal, d
+
+            def line_intersection(p1, d1, p2, d2):
+                A1 = np.array([[d1[0], -d2[0]], [d1[1], -d2[1]], [d1[2], -d2[2]]])
+                b = p2 - p1
+                t = np.linalg.lstsq(A1, b, rcond=None)[0]
+                return p1 + t[0] * d1
+
+            mid1 = (p1 + p2) / 2
+            mid2 = (p2 + p3) / 2
+            mid3 = (p3 + p1) / 2
+
+            normal1 = triangle_normal(p1, p2, p3)
+            normal2 = triangle_normal(mid1, p1, p2)
+            normal3 = triangle_normal(mid2, p2, p3)
+
+            normal1 /= np.linalg.norm(normal1)
+            normal2 /= np.linalg.norm(normal2)
+            normal3 /= np.linalg.norm(normal3)
+
+            plane1_normal, plane1_d = plane_from_points(mid1, p1, p2)
+            plane2_normal, plane2_d = plane_from_points(mid2, p2, p3)
+            plane3_normal, plane3_d = plane_from_points(mid3, p3, p1)
+
+            intersection1 = line_intersection(mid1, plane1_normal, mid2, plane2_normal)
+            intersection2 = line_intersection(mid2, plane2_normal, mid3, plane3_normal)
+            intersection3 = line_intersection(mid3, plane3_normal, mid1, plane1_normal)
+
+            napoleon_point = (intersection1 + intersection2 + intersection3) / 3
+
+        return np.round(napoleon_point, self.decimal)
