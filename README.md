@@ -6,3 +6,5 @@ It can be used to calculate area, perimeter, four hearts, Fermat points, Napoleo
 其中费马点是用退火算法逼近
 
 where the Fermat point is approximated by the annealing algorithm
+
+[使用方法](https://yesandnoandperhaps.github.io/2024/08/01/about/Triangle/)
